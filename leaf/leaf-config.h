@@ -56,7 +56,8 @@
 
 #define LEAF_NO_DENORMAL_CHECK 0
 
-#define LEAF_USE_CMSIS 0
+//Unused?
+#define LEAF_USE_CMSIS 1
 
 #ifdef __cplusplus
 //! Use stdlib malloc() and free() internally instead of LEAF's normal mempool behavior for when you want to avoid being limited to and managing mempool a fixed mempool size. Usage of all object remains essentially the same.
