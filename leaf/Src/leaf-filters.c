@@ -950,6 +950,50 @@ void    tSVF_setFreqAndQ(tSVF* const svff, Lfloat freq, Lfloat Q)
     svf->a3 = svf->g * svf->a2;
 }
 
+void    tSVF_setFilterType(tSVF* const svff, SVFType type)
+{
+    _tSVF* svf = *svff;
+ 
+    if (type == SVFTypeLowpass)
+    {
+        svf->cH = 0.0f;
+        svf->cB = 0.0f;
+        svf->cBK = 0.0f;
+        svf->cL = 1.0f;
+    }
+    else if (type == SVFTypeBandpass)
+    {
+        svf->cH = 0.0f;
+        svf->cB = 1.0f;
+        svf->cBK = 0.0f;
+        svf->cL = 0.0f;
+    }
+    
+    else if (type == SVFTypeHighpass)
+    {
+        svf->cH = 1.0f;
+        svf->cB = 0.0f;
+        svf->cBK = -1.0f;
+        svf->cL = -1.0f;
+    }
+    
+    else if (type == SVFTypeNotch)
+    {
+        svf->cH = 1.0f;
+        svf->cB = 0.0f;
+        svf->cBK = -1.0f;
+        svf->cL = 0.0f;
+    }
+    
+    else if (type == SVFTypePeak)
+    {
+        svf->cH = 1.0f;
+        svf->cB = 0.0f;
+        svf->cBK = -1.0f;
+        svf->cL = -2.0f;
+    }
+}
+
 void    tSVF_setSampleRate  (tSVF* const svff, Lfloat sr)
 {
     _tSVF* svf = *svff;
@@ -2521,6 +2565,10 @@ Lfloat   tDiodeFilter_tick               (tDiodeFilter* const vf, Lfloat in)
     f->s2 += 2.0f * (t3*(y3-y2) - t2*(y2-y1));
     f->s3 += 2.0f * (-t4*(y3) - t3*(y3-y2));
     
+    f->s0 = tanhf(f->s0);
+    f->s1 = tanhf(f->s1);
+    f->s2 = tanhf(f->s2);
+    f->s3 = tanhf(f->s3);
     f->zi = in;
     return tanhf(y3*f->r);
 }
@@ -2611,9 +2659,12 @@ Lfloat   tDiodeFilter_tickEfficient               (tDiodeFilter* const vf, Lfloa
     f->s1 += 2.0f * (t2*(y2-y1) - t1*(y1-y0));
     f->s2 += 2.0f * (t3*(y3-y2) - t2*(y2-y1));
     f->s3 += 2.0f * (-t4*(y3) - t3*(y3-y2));
-
+    f->s0 = fast_tanh4(f->s0);
+    f->s1 = fast_tanh4(f->s1);
+    f->s2 = fast_tanh4(f->s2);
+    f->s3 = fast_tanh4(f->s3);
     f->zi = in;
-    return fast_tanh5(y3*f->r);
+    return fast_tanh4(y3*f->r);
 }
 
 void    tDiodeFilter_setFreq     (tDiodeFilter* const vf, Lfloat cutoff)

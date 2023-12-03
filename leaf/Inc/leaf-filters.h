@@ -631,6 +631,10 @@ extern "C" {
      @brief
      @param filter A pointer to the relevant tSVF.
      ￼￼￼
+     @fn void    tSVF_setFilterType    (tSVF* const svff, SVFType type)
+     @brief
+     @param filter A pointer to the relevant tSVF.
+     @param type which kind of filter do you want to change the SVF to?
      @} */
     
     typedef enum SVFType
@@ -667,6 +671,7 @@ extern "C" {
     void    tSVF_setFreqFast     (tSVF* const vf, Lfloat cutoff);
     void    tSVF_setQ           (tSVF* const, Lfloat Q);
     void    tSVF_setFreqAndQ    (tSVF* const svff, Lfloat freq, Lfloat Q);
+    void    tSVF_setFilterType  (tSVF* const svff, SVFType type);
     void    tSVF_setSampleRate  (tSVF* const svff, Lfloat sr);
     
     //==============================================================================
