@@ -1517,7 +1517,7 @@ void   tSimpleLivingString5_pluck(tSimpleLivingString5* const pl, Lfloat input, 
     Lfloat BLen = p->delUB->delay;
     Lfloat FLen = p->delUF->delay;
     uint32_t FLenInt = (uint32_t)FLen;
-    float FLenAlpha = FLen -FLenInt;
+    //float FLenAlpha = FLen -FLenInt;
     uint32_t BLenInt = (uint32_t)BLen;
     float BLenAlpha = BLen -BLenInt;
     
