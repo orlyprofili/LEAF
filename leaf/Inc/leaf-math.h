@@ -93,6 +93,8 @@ extern "C" {
 #define TWO_TO_31        2147483648.0f
 #define INV_TWO_TO_31    0.000000000465661f
 #define TWO_TO_32        4294967296.0f
+#define TWO_TO_32_ONE_QUARTER        1073741824u
+#define TWO_TO_32_THREE_QUARTERS        3221225472u
 #define INV_TWO_TO_32    0.000000000232831f
 
 #define TWO_TO_32_INT        4294967296u
@@ -102,6 +104,8 @@ extern "C" {
 #define INV_SQRT2  0.707106781186548f
 
 #define LOGTEN 2.302585092994
+
+    Lfloat my_faster_logf (Lfloat a);
     Lfloat log2f_approx(Lfloat X);
     Lfloat log2f_approx2(Lfloat x);
     Lfloat fast_sinf2(Lfloat x);
@@ -142,8 +146,8 @@ extern "C" {
     Lfloat interpolate3max(Lfloat *buf, const int peakindex);
     Lfloat interpolate3phase(Lfloat *buf, const int peakindex);
     float LEAF_map(float value, float istart, float istop, float ostart, float ostop);
-    
-
+    float LEAF_mapFromZeroToOneInput(float value, float ostart, float ostop);
+    float LEAF_mapToZeroToOneOutput(float value, float istart, float istop);
     Lfloat fastcosf(Lfloat fAngle);
 
     Lfloat fastercosf(Lfloat fAngle);
@@ -163,7 +167,7 @@ extern "C" {
     Lfloat fastabsf(Lfloat f);
     
     Lfloat fastexp2f(Lfloat f);
-    
+
     Lfloat fastPowf(Lfloat a, Lfloat b) ;
     double fastPow(double a, double b);
 
@@ -207,7 +211,9 @@ extern "C" {
     double fasterexp(double x);
 
     Lfloat fasterexpf(Lfloat x);
-    
+
+    Lfloat fastExp3(Lfloat x);
+    Lfloat fastExp4(Lfloat x);
     Lfloat fastsqrtf(Lfloat x);
 
     Lfloat mtof(Lfloat f);

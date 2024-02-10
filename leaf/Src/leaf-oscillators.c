@@ -16,7 +16,34 @@
 
 #endif
 
+#ifdef ARM_MATH_CM7
+#include "arm_math.h"
+#endif
 
+inline float blamp0(float x) {
+  return 1.0f / 3.0f * x * x * x;
+}
+
+inline float blamp1(float x) {
+  x = x - 1.0f;
+  return -1.0f / 3.0f * x * x * x;
+}
+
+//PolyBLEP Waveform generator ported from the Jesusonic code by Tale
+//http://www.taletn.com/reaper/mono_synth/
+//from Martin Finke's githubb polyblep project
+// Derived from blep().
+inline float blamp(float t, float dt) {
+    if (t < dt) {
+        t = (t / dt) - 1.0f;
+        return -1.0f / 3.0f * t * t * t;
+    } else if (t > (1.0f - dt)) {
+        t = (t - 1.0f) / dt + 1.0f;
+        return 1.0f / 3.0f * t * t * t;
+    } else {
+        return 0.0f;
+    }
+}
 
 #if LEAF_INCLUDE_SINE_TABLE
 // Cycle
@@ -395,11 +422,12 @@ void    tPBTriangle_initToPool    (tPBTriangle* const osc, tMempool* const mp)
     LEAF* leaf = c->mempool->leaf;
 
     c->invSampleRate = leaf->invSampleRate;
-    c->inc      =  0.0f;
-    c->phase    =  0.25f;
-    c->skew     =  0.5f;
-    c->oneMinusSkew     =  0.5f;
-    c->lastOut  =  0.0f;
+    c->invSampleRateTimesTwoTo32 = c->invSampleRate * TWO_TO_32;
+    c->inc      =  0;
+    c->phase    =  0;
+    c->width     =  (0.5f * TWO_TO_32);
+    c->oneMinusWidth =  c->width;
+    c->freq = 0.0f;
 }
 
 void    tPBTriangle_free (tPBTriangle* const cy)
@@ -418,45 +446,33 @@ Lfloat   tPBTriangle_tick          (tPBTriangle* const osc)
 {
     _tPBTriangle* c = *osc;
 
-    Lfloat t = c->phase;
-    Lfloat dt = 0.0f;
-    if (c->inc >=0)
-    {
-        dt = -1.0f * c->inc;
-    }
-    else
-    {
-        dt = c->inc;
-    }
-    //compute the naive waveform
-    
-    //Lfloat v = 2.0f * fabsf((2.0f * c->phase) - 1.0f) - 1.0f;
-    Lfloat v = 0.0f;
-    
-    if (t < c->skew)
-    {
-        v = 2.0f * t / c->skew - 1.0f;
-    }
-    if (t >= c->skew)
-    {
-        v = -2.0f * (t - c->skew) / c->oneMinusSkew + 1.0f;
-    }
+    uint32_t halfWidth =(c->width >> 1);
+    Lfloat floatWidth = c->width * INV_TWO_TO_32;
+    uint32_t t1 = c->phase + halfWidth;
 
-    //add the blamps
-    v += LEAF_poly_blamp(t,  dt);
-    v += LEAF_poly_blamp(1.0f - t,  dt);
-    t += 0.5f;
-    t -= (int)(t);
-    v -= LEAF_poly_blamp(t, dt);
-    v -= LEAF_poly_blamp(1.0f - t,  dt);
+    uint32_t t2 = c->phase + (4294967296u - halfWidth);
+    
+    Lfloat t1F = t1 * INV_TWO_TO_32;
+    Lfloat t2F = t2 * INV_TWO_TO_32;
+    Lfloat t = c->phase * INV_TWO_TO_32;
+    Lfloat incFloat = c->inc * INV_TWO_TO_32;
+    
+    float y = t * 2.0f;
 
-    //increment phase for next tick
-    c->phase += c->inc - (int)c->inc;
-	while (c->phase >= 1.0f) c->phase -= 1.0f;
-	while (c->phase < 0.0f) c->phase += 1.0f;
-	return -v;
+    if (y >= 2.0f - floatWidth) {
+        y = (y - 2.0f) / floatWidth;
+    } else if (y >= floatWidth) {
+        y = 1.0f - (y - floatWidth) / (1.0f - floatWidth);
+    } else {
+        y /= floatWidth;
+    }
+    Lfloat blampOne = blamp(t1F, incFloat);
+    Lfloat blampTwo = blamp(t2F, incFloat);
+    Lfloat scaling = incFloat / (floatWidth - floatWidth * floatWidth) ;
+    y += scaling * (blampOne - blampTwo);
+    c->phase += c->inc;
+    return y;
 }
-
 
 #ifdef ITCMRAM
     void __attribute__ ((section(".itcmram"))) __attribute__ ((aligned (32))) tPBTriangle_setFreq       (tPBTriangle* const osc, Lfloat freq)
@@ -467,16 +483,16 @@ void    tPBTriangle_setFreq       (tPBTriangle* const osc, Lfloat freq)
     _tPBTriangle* c = *osc;
     
     c->freq  = freq;
-    c->inc = freq * c->invSampleRate;
+    c->inc = freq * c->invSampleRateTimesTwoTo32;
 }
 
-void    tPBTriangle_setSkew       (tPBTriangle* const osc, Lfloat mySkew)
+void    tPBTriangle_setSkew       (tPBTriangle* const osc, Lfloat width)
 {
     _tPBTriangle* c = *osc;
-
-    mySkew = LEAF_clip(0.01f, mySkew, 0.99f);
-    c->skew = (mySkew + 1.0f) * 0.5f;
-    c->oneMinusSkew = 1.0f - c->skew;
+    width = width*0.5f + 0.5f;
+    width = LEAF_clip(0.01f, width, 0.99f);
+    c->oneMinusWidth = (1.0f - width) * TWO_TO_32;
+    c->width = width * TWO_TO_32;
 }
 
 void     tPBTriangle_setSampleRate (tPBTriangle* const osc, Lfloat sr)
@@ -484,6 +500,7 @@ void     tPBTriangle_setSampleRate (tPBTriangle* const osc, Lfloat sr)
     _tPBTriangle* c = *osc;
     
     c->invSampleRate = 1.0f/sr;
+    c->invSampleRateTimesTwoTo32 = c->invSampleRate * TWO_TO_32;
     tPBTriangle_setFreq(osc, c->freq);
 }
 
@@ -504,12 +521,12 @@ void    tPBSineTriangle_initToPool    (tPBSineTriangle* const osc, tMempool* con
     LEAF* leaf = c->mempool->leaf;
     tCycle_initToPool(&c->sine, mp);
     c->invSampleRate = leaf->invSampleRate;
-    c->inc      =  0.0f;
-    c->phase    =  0.25f;
+    c->invSampleRateTimesTwoTo32 = c->invSampleRate * TWO_TO_32;
+    c->inc      =  0;
+    c->phase    =  0;
+    c->freq = 0.0f;
     c->shape     =  0.0f;
-    c->skew 	 = 0.5f;
     c->oneMinusShape = 1.0f;
-    c->lastOut  =  0.0f;
 }
 
 void    tPBSineTriangle_free (tPBSineTriangle* const cy)
@@ -526,38 +543,31 @@ Lfloat   tPBSineTriangle_tick          (tPBSineTriangle* const osc)
 #endif
 {
     _tPBSineTriangle* c = *osc;
-    Lfloat out = 0.0f;
-   
-    Lfloat t = c->phase;
-    Lfloat dt = 0.0f;
-    if (c->inc >=0)
-    {
-        dt = -1.0f * c->inc;
+
+    uint32_t t1 = c->phase + TWO_TO_32_ONE_QUARTER;
+
+    uint32_t t2 = c->phase + TWO_TO_32_THREE_QUARTERS;
+    
+    Lfloat t1F = t1 * INV_TWO_TO_32;
+    Lfloat t2F = t2 * INV_TWO_TO_32;
+    Lfloat t = c->phase * INV_TWO_TO_32;
+    Lfloat incFloat = c->inc * INV_TWO_TO_32;
+    
+    float y = t * 4.0f;
+
+    if (y >= 3.0f) {
+        y -= 4.0f;
+    } else if (y > 1.0f) {
+        y = 2.0f - y;
     }
-    else
-    {
-        dt = c->inc;
-    }
+    y += 4.0f * incFloat * (blamp(t1F, incFloat) - blamp(t2F, incFloat));
+    y = y * c->shape; // shape handles the inversion so it's in phase with sine (already * -1.0f)
 
-    //compute the naive waveform
-    Lfloat v = 2.0f * fabsf((2.0f * c->phase) - 1.0f) - 1.0f;
-
-    //add the blamps
-    v += LEAF_poly_blamp(t,  dt);
-    v += LEAF_poly_blamp(1.0f - t,  dt);
-    t += 0.5f;
-    t -= (int)(t);
-    v -= LEAF_poly_blamp(t, dt);
-    v -= LEAF_poly_blamp(1.0f - t,  dt);
-
-    //increment phase for next tick
-    c->phase += c->inc - (int)c->inc;
-    while (c->phase >= 1.0f) c->phase -= 1.0f;
-    while (c->phase < 0.0f) c->phase += 1.0f;
-    out = v * c->shape; // shape handles the inversion so it's in phase with sine (already * -1.0f)
-
-    out = out + (tCycle_tick(&c->sine) * c->oneMinusShape);
-    return out;
+    y = y + (tCycle_tick(&c->sine) * c->oneMinusShape);
+    
+    c->phase += c->inc;
+    
+    return y;
 }
 
 #ifdef ITCMRAM
@@ -567,9 +577,8 @@ void    tPBSineTriangle_setFreq       (tPBSineTriangle* const osc, Lfloat freq)
 #endif
 {
     _tPBSineTriangle* c = *osc;
-
     c->freq  = freq;
-    c->inc = freq * c->invSampleRate;
+    c->inc = freq * c->invSampleRateTimesTwoTo32;
     tCycle_setFreq(&c->sine, freq);
 }
 
@@ -585,6 +594,7 @@ void    tPBSineTriangle_setSampleRate (tPBSineTriangle* const osc, Lfloat sr)
     _tPBSineTriangle* c = *osc;
 
     c->invSampleRate = 1.0f/sr;
+    c->invSampleRateTimesTwoTo32 = c->invSampleRate * TWO_TO_32;
     tPBSineTriangle_setFreq(osc, c->freq);
 }
 //==============================================================================
@@ -626,15 +636,19 @@ Lfloat   tPBPulse_tick        (tPBPulse* const osc)
 {
     _tPBPulse* c = *osc;
     
-
     Lfloat phaseFloat = c->phase *  INV_TWO_TO_32;
     Lfloat incFloat = c->inc *  INV_TWO_TO_32;
     Lfloat backwardsPhaseFloat = (c->phase + c->oneMinusWidth) * INV_TWO_TO_32;
-    Lfloat out = ((c->phase < c->width) * 2.0f) - 1.0f;
+    Lfloat widthFloat =c->width *INV_TWO_TO_32;
+    Lfloat out = -2.0f * widthFloat;
+    if (phaseFloat < widthFloat) {
+        out += 2.0f;
+    }
     out += LEAF_poly_blep(phaseFloat,incFloat);
     out -= LEAF_poly_blep(backwardsPhaseFloat, incFloat);
     c->phase += c->inc;
     return out;
+    
 }
 
 #ifdef ITCMRAM
@@ -780,7 +794,7 @@ Lfloat   tPBSawSquare_tick          (tPBSawSquare* const osc)
 {
     _tPBSawSquare* c = *osc;
 
-    Lfloat squareOut = ((c->phase < 2147483648u) * 2.0f) - 1.0f;
+    //Lfloat squareOut = ((c->phase < 2147483648u) * 2.0f) - 1.0f;
     Lfloat sawOut = (c->phase * INV_TWO_TO_32 * 2.0f) - 1.0f;
     Lfloat phaseFloat = c->phase * INV_TWO_TO_32;
     Lfloat incFloat = c->inc * INV_TWO_TO_32;
@@ -788,9 +802,12 @@ Lfloat   tPBSawSquare_tick          (tPBSawSquare* const osc)
     Lfloat resetBlep = LEAF_poly_blep(phaseFloat,incFloat);
     Lfloat midBlep = LEAF_poly_blep(backwardsPhaseFloat, incFloat);
     
-
+    Lfloat squareOut = -1.0f;
+    if (phaseFloat < 0.5f) {
+        squareOut += 2.0f;
+    }
     sawOut -= resetBlep;
-    
+
     squareOut += resetBlep;
     squareOut -= midBlep;
 
@@ -808,7 +825,7 @@ void    tPBSawSquare_setFreq       (tPBSawSquare* const osc, Lfloat freq)
     _tPBSawSquare* c = *osc;
     
     c->freq  = freq;
-    c->inc = (uint32_t)(freq * c->invSampleRateTimesTwoTo32);
+    c->inc = (freq * c->invSampleRateTimesTwoTo32);
 
 }
 
@@ -3158,7 +3175,7 @@ void tWaveTable_setSampleRate(tWaveTable* const cy, Lfloat sr)
     }
     
     // Make bandlimited copies
-    f = c->sampleRate * 0.25; //start at half nyquist
+    f = c->sampleRate * 0.25f; //start at half nyquist
     // Not worth going over order 8 I think, and even 8 is only marginally better than 4.
     tButterworth_initToPool(&c->bl, 8, -1.0f, f, &c->mempool);
     tButterworth_setSampleRate(&c->bl, c->sampleRate);
@@ -4068,3 +4085,93 @@ void    tSineTriLFO_setPhase (tSineTriLFO* const cy, Lfloat phase)
     c->shape = shape;
 
  }
+
+
+
+
+ void    tDampedOscillator_init        (tDampedOscillator* const cy, LEAF* const leaf)
+ {
+	 tDampedOscillator_initToPool(cy, &leaf->mempool);
+ }
+
+ void    tDampedOscillator_initToPool  (tDampedOscillator* const cy, tMempool* const mp)
+ {
+     _tMempool* m = *mp;
+     _tDampedOscillator* c = *cy = (_tDampedOscillator*) mpool_alloc(sizeof(_tDampedOscillator), m);
+     c->mempool = m;
+     LEAF* leaf = c->mempool->leaf;
+
+
+     c->freq_ = 0.0f;
+     c->decay_ = 1.0f;
+
+     tDampedOscillator_setSampleRate(cy, leaf->sampleRate);
+     c->loop_gain_ = cosf(c->freq_ * c->two_pi_by_sample_rate_);
+     	  Lfloat g = sqrtf((1.0f - c->loop_gain_) / (1.0f + c->loop_gain_));
+    c->turns_ratio_ = g;
+    tDampedOscillator_reset(cy);
+
+ }
+ void    tDampedOscillator_free        (tDampedOscillator* const cy)
+ {
+	 _tDampedOscillator* c = *cy;
+
+     mpool_free((char*)c, c->mempool);
+ }
+
+ Lfloat   tDampedOscillator_tick        (tDampedOscillator* const cy)
+ {
+	 _tDampedOscillator* c = *cy;
+	   Lfloat w = c->decay_ * c->x_;
+	   Lfloat z = c->loop_gain_ * (c->y_ + w);
+	   c->x_ = z - c->y_;
+	   c->y_ = z + w;
+	   return c->y_;
+ }
+ void    tDampedOscillator_setFreq     (tDampedOscillator* const cy, Lfloat freq_hz)
+ {
+	 _tDampedOscillator* c = *cy;
+
+	  c->freq_ = freq_hz;
+
+#ifdef ARM_MATH_CM7
+	  c->loop_gain_ = arm_cos_f32(freq_hz * c->two_pi_by_sample_rate_);
+	  Lfloat g = 1.0f;
+	  arm_sqrt_f32((1.0f - c->loop_gain_) / (1.0f + c->loop_gain_), &g);
+#else
+	  c->loop_gain_ = cosf(freq_hz * c->two_pi_by_sample_rate_);
+	  Lfloat g = sqrtf((1.0f - c->loop_gain_) / (1.0f + c->loop_gain_));
+#endif
+	  // scale state variable in preparation for the next step
+	  c->x_ *= g / c->turns_ratio_;
+	  c->turns_ratio_ = g;
+
+ }
+
+ void    tDampedOscillator_setDecay    (tDampedOscillator* const cy, Lfloat decay)
+ {
+	 _tDampedOscillator* c = *cy;
+
+
+	 Lfloat r = fastExp4(-decay * c->two_pi_by_sample_rate_);
+
+
+	 c->decay_ = r * r;
+
+ }
+
+ void    tDampedOscillator_setSampleRate (tDampedOscillator* const cy, Lfloat sr)
+ {
+	 _tDampedOscillator* c = *cy;
+	 c->two_pi_by_sample_rate_ = TWO_PI / sr;
+ }
+
+
+  void    tDampedOscillator_reset (tDampedOscillator* const cy)
+  {
+	  _tDampedOscillator* c = *cy;
+	  c->x_ = c->turns_ratio_;
+	  c->y_ = 0.0f;
+
+  }
+

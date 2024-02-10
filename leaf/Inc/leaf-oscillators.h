@@ -302,14 +302,14 @@ extern "C" {
     typedef struct _tPBSineTriangle
     {
         tMempool mempool;
-        Lfloat phase;
-        Lfloat inc,freq;
-        Lfloat shape;
-        Lfloat lastOut;
-        Lfloat invSampleRate;
+        uint32_t phase;
         tCycle sine;
+        int32_t inc;
+        Lfloat freq;
+        Lfloat shape;
         Lfloat oneMinusShape;
-        Lfloat skew;
+        Lfloat invSampleRate;
+        Lfloat invSampleRateTimesTwoTo32;
     } _tPBSineTriangle;
 
     typedef _tPBSineTriangle* tPBSineTriangle;
@@ -338,12 +338,14 @@ extern "C" {
     typedef struct _tPBTriangle
     {
         tMempool mempool;
-        Lfloat phase;
-        Lfloat inc,freq;
-        Lfloat skew;
-        Lfloat oneMinusSkew;
-        Lfloat lastOut;
+        uint32_t phase;
+        int32_t inc;
+        Lfloat freq;
+        uint32_t width;
+        uint32_t oneMinusWidth;
+        Lfloat lastOutput;
         Lfloat invSampleRate;
+        Lfloat invSampleRateTimesTwoTo32;
     } _tPBTriangle;
     
     typedef _tPBTriangle* tPBTriangle;
@@ -1742,6 +1744,34 @@ void tMBSawPulse_place_step_dd_noBuffer(tMBSawPulse* const osc, int index, Lfloa
 #ifdef __cplusplus
 }
 #endif
+
+
+typedef struct _tDampedOscillator
+	{
+		tMempool mempool;
+
+		Lfloat freq_;
+		Lfloat decay_;
+		Lfloat two_pi_by_sample_rate_;
+		Lfloat loop_gain_;
+		Lfloat turns_ratio_;
+		Lfloat x_;
+		Lfloat y_;
+	} _tDampedOscillator;
+
+	typedef _tDampedOscillator* tDampedOscillator;
+
+	void    tDampedOscillator_init(tDampedOscillator* const osc, LEAF* const leaf);
+	void    tDampedOscillator_initToPool(tDampedOscillator* const osc, tMempool* const mempool);
+	void    tDampedOscillator_free(tDampedOscillator* const osc);
+
+	Lfloat   tDampedOscillator_tick(tDampedOscillator* const osc);
+	void    tDampedOscillator_setFreq(tDampedOscillator* const osc, Lfloat freq);
+	void    tDampedOscillator_setSampleRate (tDampedOscillator* const osc, Lfloat sr);
+	void 	tDampedOscillator_setDecay(tDampedOscillator* const osc, Lfloat decay);
+	void 	tDampedOscillator_reset(tDampedOscillator* const osc);
+
+
 
 #endif  // LEAF_OSCILLATORS_H_INCLUDED
 

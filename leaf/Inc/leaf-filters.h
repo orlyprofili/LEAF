@@ -316,8 +316,9 @@ typedef struct _tCookOnePole
 {
     
     tMempool mempool;
-    Lfloat poleCoeff, gain, sgain, output, lastOutput;
+    Lfloat poleCoeff, sgain, output;
     Lfloat twoPiTimesInvSampleRate;
+    Lfloat gain;
 } _tCookOnePole;
 
 typedef _tCookOnePole* tCookOnePole;
@@ -821,6 +822,7 @@ void    tCookOnePole_setSampleRate  (tCookOnePole* const, Lfloat sr);
         Lfloat g,k,a1,a2,a3,cH,cB,cL,cBK;
         Lfloat sampleRate;
         Lfloat invSampleRate;
+        Lfloat phaseComp;
         const Lfloat *table;
     } _tSVF;
     
@@ -837,6 +839,7 @@ void    tCookOnePole_setSampleRate  (tCookOnePole* const, Lfloat sr);
     void    tSVF_setFreqAndQ    (tSVF* const svff, Lfloat freq, Lfloat Q);
     void    tSVF_setFilterType  (tSVF* const svff, SVFType type);
     void    tSVF_setSampleRate  (tSVF* const svff, Lfloat sr);
+    Lfloat    tSVF_getPhaseAtFrequency  (tSVF* const svff, Lfloat freq);
     
     //==============================================================================
     

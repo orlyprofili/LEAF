@@ -25,15 +25,21 @@ extern "C" {
 #include "leaf-oscillators.h"
 #include "leaf-envelopes.h"
 #include "leaf-dynamics.h"
-    
-    /*!
-     * @internal
-     * Header.
-     * @include basic-oscillators.h
-     * @example basic-oscillators.c
-     * An example.
-     */
-    
+
+
+typedef struct _tPickupNonLinearity
+{
+
+    tMempool mempool;
+    Lfloat prev;
+} _tPickupNonLinearity;
+
+typedef _tPickupNonLinearity* tPickupNonLinearity;
+
+void   tPickupNonLinearity_init          (tPickupNonLinearity* const p, LEAF* const leaf);
+void   tPickupNonLinearity_initToPool          (tPickupNonLinearity* const p, tMempool* const mp);
+void   tPickupNonLinearity_free          (tPickupNonLinearity* const p);
+Lfloat   tPickupNonLinearity_tick          (tPickupNonLinearity* const p, Lfloat in);
     //==============================================================================
     
     /*!
@@ -410,6 +416,7 @@ typedef struct _tSimpleLivingString3
     Lfloat sampleRate;
     Lfloat rippleGain;
     Lfloat rippleDelay;
+    Lfloat invOnePlusr;
 } _tSimpleLivingString3;
 
 typedef _tSimpleLivingString3* tSimpleLivingString3;
@@ -999,26 +1006,26 @@ typedef struct _tTString
     tMempool mempool;
     int oversampling;
     Lfloat invOversampling;
+    Lfloat invOversamplingTimesTwo;
+    Lfloat twoPiTimesInvSampleRate;
     // delay lines
     tLagrangeDelay delay;
     tLagrangeDelay delayP;
-    Lfloat power;
-    Lfloat M;
-    
+    tHighpass dcBlock;
+    tHighpass dcBlockP;
     // one pole filter
     tCookOnePole reflFilt;
     tCookOnePole reflFiltP;
     Lfloat baseDelay;
-    uint32_t halfBaseDelay;
     Lfloat sampleRate;
     Lfloat invSampleRate;
+    Lfloat invSampleRateTimesTwoPi;
     Lfloat output;
     Lfloat outputP;
-    Lfloat prevTension;
     Lfloat tensionGain;
-    Lfloat a;
-    //tSlide slide;
-    //tHighpass dcBlock;
+    tSlide slide;
+    tExpSmooth tensionSmoother;
+    tExpSmooth pitchSmoother;
     tThiranAllpassSOCascade allpass;
     tThiranAllpassSOCascade allpassP;
     Lfloat allpassDelay;
@@ -1026,29 +1033,124 @@ typedef struct _tTString
     Lfloat freq;
     tSVF lowpassP;
     tSVF highpassP;
-    int stop;
-    Lfloat twoPiTimesInvSampleRate;
+    Lfloat filterFreq;
     Lfloat decayCoeff;
     Lfloat muteCoeff;
+    Lfloat r;
+    Lfloat rippleRate;
+    Lfloat harmonic;
+    Lfloat decayInSeconds;
+    Lfloat invOnePlusr;
+    Lfloat actualLowestFreq;
+    Lfloat pickupOut;
+    Lfloat pickupOutP;
+    Lfloat pickupPos;
+
+    Lfloat tensionAmount;
+    tCycle tensionModOsc;
+    Lfloat phantomGain;
+    tCycle pickupModOsc;
+    Lfloat pickupModOscFreq;
+    Lfloat pickupModOscAmp;
+    tSVF pickupFilter;
+    tSVF pickupFilter2;
+    Lfloat slideAmount;
+    Lfloat absSlideAmount;
+    Lfloat smoothedSlideAmount;
+    tNoise noise;
+    Lfloat slideNoise;
+    Lfloat slideGain;
+    uint32_t wound;
+    tExpSmooth barPulse;
+    Lfloat barPulseInc;
+    uint32_t barPulsePhasor;
+    tSVF barResonator;
+    Lfloat barPosition;
+    Lfloat prevBarPosition;
+    Lfloat openStringLength;
+    Lfloat pickupRatio;
+    Lfloat lastBump;
+    Lfloat timeSinceLastBump;
+    uint32_t sampleCount;
+    tSlide barSmooth;
+    tHighpass barHP;
+    tSVF barLP;
+    tSlide barPulseSlide;
+    tExpSmooth barSmooth2;
+    tExpSmooth barSmoothVol;
+    Lfloat prevBarPosSmoothVol;
+    Lfloat prevBumpSmoothed;
+    Lfloat prevBarPosSmoothed;
+    Lfloat bumpSmoothed;
+    Lfloat barDrive;
+    uint32_t bumpOsc;
+    uint32_t bumpCount;
+    Lfloat phaseComp;
+    Lfloat poleCoeff;
+    Lfloat muted;
+    uint32_t inharmonic;
+    Lfloat inharmonicMult;
+    uint32_t maxDelay;
+    uint32_t tensionJumps;
+    tFeedbackLeveler feedback;
+    tFeedbackLeveler feedbackP;
+    Lfloat feedbackNoise;
+    Lfloat feedbackNoiseLevel;
+    Lfloat quarterSampleRate;
+    Lfloat windingsPerInch;
+    uint32_t wavelength;
+    Lfloat pluckRatio;
+    Lfloat pickup_Ratio;
+    tExpSmooth pickNoise;
+    tNoise pickNoiseSource;
+    Lfloat pluckPoint_forInput;
+    tSVF peakFilt;
+    Lfloat pickupAmount;
+    tPickupNonLinearity p;
 } _tTString;
 
 typedef _tTString* tTString;
 
-void    tTString_init                  (tTString* const, int oversampling, LEAF* const leaf);
-void    tTString_initToPool            (tTString* const, int oversampling, tMempool* const);
+void    tTString_init                  (tTString* const, int oversampling, Lfloat lowestFreq, LEAF* const leaf);
+void    tTString_initToPool            (tTString* const, int oversampling, Lfloat lowestFreq, tMempool* const);
 void    tTString_free                  (tTString* const);
 
 Lfloat   tTString_tick                  (tTString* const);
 void    tTString_setDecay               (tTString* const bw, Lfloat decay);
 void    tTString_mute              (tTString* const bw);
 void    tTString_setFilter              (tTString* const bw, Lfloat filter);
+void   tTString_setTensionGain                  (tTString* const bw, Lfloat tensionGain);
+void   tTString_setTensionSpeed                  (tTString* const bw, Lfloat tensionSpeed);
 void    tTString_setFreq               (tTString* const, Lfloat freq);
 void    tTString_pluck               (tTString* const bw, Lfloat position, Lfloat amplitude);
-void    tTString_setWaveLength         (tTString* const, Lfloat waveLength); // in samples
+void    tTString_setWavelength         (tTString* const, uint32_t waveLength); // in samples
 void    tTString_setSampleRate         (tTString* const, Lfloat sr);
 void    tTString_setHarmonicity         (tTString* const, Lfloat B, Lfloat freq);
-
-    /*!
+void   tTString_setRippleDepth                  (tTString* const bw, Lfloat depth);
+void   tTString_setHarmonic                  (tTString* const bw, Lfloat harmonic);
+void   tTString_setPhantomHarmonicsGain                  (tTString* const bw, Lfloat gain);
+void   tTString_setSlideGain                  (tTString* const bw, Lfloat gain);
+void    tTString_setPickupPos               (tTString* const bw, Lfloat pos);
+void    tTString_setPickupModAmp               (tTString* const bw, Lfloat amp);
+void    tTString_setPickupModFreq               (tTString* const bw, Lfloat freq);
+void   tTString_setBarPosition                  (tTString* const bw, Lfloat barPosition);
+void   tTString_setOpenStringFrequency                  (tTString* const bw, Lfloat openStringFrequency);
+void   tTString_setPickupRatio                  (tTString* const bw, Lfloat ratio);
+void   tTString_setBarDrive                  (tTString* const bw, Lfloat drive);
+void   tTString_setFeedbackStrength                  (tTString* const bw, Lfloat strength);
+void   tTString_setFeedbackReactionSpeed                  (tTString* const bw, Lfloat speed);
+void    tTString_setInharmonic         (tTString* const bw, uint32_t onOrOff);
+void    tTString_setWoundOrUnwound         (tTString* const bw, uint32_t wound);
+void    tTString_setWindingsPerInch         (tTString* const bw, uint32_t windings);
+void    tTString_setPickupFilterFreq         (tTString* const bw, Lfloat cutoff);
+void    tTString_setPickupFilterQ        (tTString* const bw, Lfloat Q);
+void    tTString_setPeakFilterFreq        (tTString* const bw, Lfloat freq);
+void    tTString_setPeakFilterQ        (tTString* const bw, Lfloat Q);
+void    tTString_setFilterFreqDirectly              (tTString* const bw, Lfloat freq);
+void    tTString_setDecayInSeconds               (tTString* const bw, Lfloat decay);
+void    tTString_setPickupAmount               (tTString* const bw, Lfloat amount);
+/*!
+ *   *
      @defgroup treedtable tReedTable
      @ingroup physical
      @brief Reed Table - borrowed from STK
@@ -1103,9 +1205,62 @@ void    tTString_setHarmonicity         (tTString* const, Lfloat B, Lfloat freq)
     Lfloat   tReedTable_tanh_tick    (tReedTable* const, Lfloat input); //tanh softclip version of reed table - replacing the hard clip in original stk code
     void    tReedTable_setOffset    (tReedTable* const, Lfloat offset);
     void    tReedTable_setSlope     (tReedTable* const, Lfloat slope);
-    
-    //==============================================================================
-    
+
+//==============================================================================
+
+typedef struct _tStiffString
+    {
+        tMempool mempool;
+        int numModes;
+        tCycle *osc; // array of oscillators
+        Lfloat *amplitudes;
+        Lfloat *outputWeights;
+        Lfloat freqHz;        // the frequency of the whole string, determining delay length
+
+        Lfloat stiffness;
+        Lfloat pluckPos;    // the pick position, dividing the string in two, in ratio
+        Lfloat pickupPos;    // the preparation position, dividing the string in two, in ratio
+        Lfloat decay;
+        Lfloat decayHighFreq;
+        Lfloat sampleRate;
+        Lfloat twoPiTimesInvSampleRate;
+        Lfloat *decayScalar;
+        Lfloat *decayVal;
+        Lfloat *nyquistCoeff;
+        Lfloat nyquist;
+        Lfloat nyquistScalingFactor;
+        Lfloat muteDecay;
+        Lfloat amp;
+        Lfloat gainComp;
+    } _tStiffString;
+
+    typedef _tStiffString* tStiffString;
+
+    void tStiffString_init        (tStiffString* const, int numModes, LEAF* const leaf);
+    void tStiffString_initToPool  (tStiffString* const, int numModes, tMempool* const);
+    void tStiffString_free        (tStiffString* const);
+
+    Lfloat tStiffString_tick(tStiffString* const);
+    void tStiffString_setStiffness(tStiffString* const, Lfloat newValue);
+    void tStiffString_setFreq(tStiffString* const, Lfloat newFreq);
+    void tStiffString_pluck(tStiffString* const, Lfloat amp);
+    void tStiffString_setPickupPos(tStiffString* const, Lfloat pickuppos);
+    void tStiffString_setPluckPos(tStiffString* const, Lfloat pluckpos);
+    void tStiffString_setDecay(tStiffString* const, Lfloat decay);
+    void tStiffString_setDecayHighFreq(tStiffString* const, Lfloat decayHF);
+    void tStiffString_updateOscillators(tStiffString* const pm);
+    void tStiffString_updateOutputWeights(tStiffString* const pm);
+    void tStiffString_mute(tStiffString* const pm);
+
+    void tStiffString_setStiffnessNoUpdate(tStiffString* const, Lfloat newValue);
+    void tStiffString_setFreqNoUpdate(tStiffString* const, Lfloat newFreq);
+    void tStiffString_pluckNoUpdate(tStiffString* const, Lfloat amp);
+    void tStiffString_setPickupPosNoUpdate(tStiffString* const, Lfloat pickuppos);
+    void tStiffString_setPluckPosNoUpdate(tStiffString* const, Lfloat pluckpos);
+    void tStiffString_setDecayNoUpdate(tStiffString* const, Lfloat decay);
+    void tStiffString_setDecayHighFreqNoUpdate(tStiffString* const, Lfloat decayHF);
+
+
 #ifdef __cplusplus
 }
 #endif
@@ -1113,5 +1268,3 @@ void    tTString_setHarmonicity         (tTString* const, Lfloat B, Lfloat freq)
 #endif // LEAF_PHYSICAL_H_INCLUDED
 
 //==============================================================================
-
-
